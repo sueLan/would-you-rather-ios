@@ -74,6 +74,6 @@ The questions use a broad, non-denominational Christian posture. Before publishi
 
 ## License
 
-Copyright 2026 Zhengrong Yan. The code, visual design, artwork, screenshots, and documentation are available under the [PolyForm Noncommercial License 1.0.0](LICENSE), together with the required notices in [NOTICE](NOTICE).
+Copyright 2026 Zheng Rongyan. The code, visual design, artwork, screenshots, and documentation are available under the [PolyForm Noncommercial License 1.0.0](LICENSE), together with the required notices in [NOTICE](NOTICE).
 
 Noncommercial study, modification, and redistribution are permitted under those terms. Commercial use requires a separate written license from the licensor. Because commercial use is restricted, this project is source-available rather than OSI-approved open source.
