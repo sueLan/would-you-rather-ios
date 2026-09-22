@@ -79,6 +79,8 @@ The history store publishes a newest-first array of `ChoiceRecord` values. Each 
 
 Snapshotting protects historical readability if bundled prompts change in a later app version. Mutations are persisted using atomic JSON replacement with complete file protection. A malformed file fails safely to an empty history rather than blocking launch.
 
+The observable store is isolated to the main actor. A separate storage actor performs file access and JSON processing off the main actor. Its synchronous isolated methods do not suspend during a read or write. Async mutations wait for initial loading and preceding mutations, and publish records only after persistence succeeds; failed saves leave the published state unchanged.
+
 Supported operations are append, delete one record, and clear all records. History remains on-device and is never transmitted.
 
 ## 4. Navigation and screen design

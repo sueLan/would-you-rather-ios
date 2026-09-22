@@ -36,8 +36,11 @@ struct HistoryView: View {
                                     }
                                 }
                                 .onDelete { offsets in
-                                    for index in offsets {
-                                        try? historyStore.delete(id: group.records[index].id)
+                                    let ids = offsets.map { group.records[$0].id }
+                                    Task {
+                                        for id in ids {
+                                            try? await historyStore.delete(id: id)
+                                        }
                                     }
                                 }
                             }
@@ -64,7 +67,7 @@ struct HistoryView: View {
     }
 
     private func clearAll() {
-        try? historyStore.deleteAll()
+        Task { try? await historyStore.deleteAll() }
     }
 
     private func t(_ key: Strings.Key) -> String { Strings.text(key, appState.language) }

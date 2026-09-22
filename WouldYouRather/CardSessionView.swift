@@ -209,15 +209,15 @@ struct CardSessionView: View {
             option: option,
             language: appState.language
         )
-        do {
-            try historyStore.append(record)
-        } catch {
-            selectedOption = nil
-            saveError = error.localizedDescription
-            return
-        }
-
         Task { @MainActor in
+            do {
+                try await historyStore.append(record)
+            } catch {
+                selectedOption = nil
+                saveError = error.localizedDescription
+                return
+            }
+
             try? await Task.sleep(for: .milliseconds(450))
             selectedOption = nil
             advance(direction: 1)
