@@ -12,7 +12,6 @@ struct RootView: View {
 
 struct DeckListView: View {
     @Query(sort: \DeckData.sortOrder) private var decks: [DeckData]
-    @Query private var cards: [CardData]
     @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 18)]
     private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
@@ -53,7 +52,6 @@ struct DeckListView: View {
                                 NavigationLink(value: deckID) {
                                     DeckTile(
                                         deck: deck,
-                                        cardCount: cards.lazy.filter { $0.deckRawValue == deck.rawID }.count,
                                         language: language
                                     )
                                 }
@@ -78,7 +76,6 @@ struct DeckListView: View {
 
 private struct DeckTile: View {
     let deck: DeckData
-    let cardCount: Int
     let language: AppLanguage
 
     var body: some View {
@@ -100,7 +97,7 @@ private struct DeckTile: View {
                     .font(.subheadline)
                     .foregroundStyle(Color.faithBrownSoft)
                     .lineLimit(2)
-                Text(Strings.text(.cards(cardCount), language))
+                Text(Strings.text(.cards(deck.cardCount), language))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.faithGold)
             }
@@ -120,7 +117,10 @@ private struct DecksPreview: PreviewProvider {
     @MainActor
     static var previews: some View {
         RootView()
-            .modelContainer(for: [DeckData.self, CardData.self, ChoiceRecord.self, CatalogMetadata.self], inMemory: true)
+            .modelContainer(for: [
+                DeckData.self, CardData.self, DeckTranslationData.self,
+                CardTranslationData.self, ChoiceRecord.self, CatalogMetadata.self
+            ], inMemory: true)
             .previewDisplayName("Decks")
     }
 }

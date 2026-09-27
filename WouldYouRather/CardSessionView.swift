@@ -505,7 +505,10 @@ private struct LoveSessionPreview: PreviewProvider {
         NavigationStack {
             CardSessionView(deckID: .love)
         }
-        .modelContainer(for: [DeckData.self, CardData.self, ChoiceRecord.self, CatalogMetadata.self], inMemory: true)
+        .modelContainer(for: [
+            DeckData.self, CardData.self, DeckTranslationData.self,
+            CardTranslationData.self, ChoiceRecord.self, CatalogMetadata.self
+        ], inMemory: true)
         .previewDisplayName("Love Session")
     }
 }

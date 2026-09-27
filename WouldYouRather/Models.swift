@@ -5,13 +5,36 @@ import SwiftUI
 enum AppLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
     case en
     case zhHans = "zh-Hans"
+    case es, pt, fr, de, hi, ar, bn, id, ja, ko, th
 
     var id: String { rawValue }
-    var displayName: String { self == .en ? "English" : "简体中文" }
+    var displayName: String {
+        switch self {
+        case .en: "English"
+        case .zhHans: "简体中文"
+        case .es: "Español"
+        case .pt: "Português"
+        case .fr: "Français"
+        case .de: "Deutsch"
+        case .hi: "हिन्दी"
+        case .ar: "العربية"
+        case .bn: "বাংলা"
+        case .id: "Bahasa Indonesia"
+        case .ja: "日本語"
+        case .ko: "한국어"
+        case .th: "ไทย"
+        }
+    }
+
+    var isRightToLeft: Bool { self == .ar }
     static let storageKey = "preferred-language"
 
     static var systemDefault: AppLanguage {
-        Locale.preferredLanguages.first?.hasPrefix("zh") == true ? .zhHans : .en
+        guard let preferred = Locale.preferredLanguages.first else { return .en }
+        let candidate = allCases.first {
+            preferred.lowercased().hasPrefix($0.rawValue.lowercased())
+        } ?? .en
+        return TranslationRegistry.releaseLanguages.contains(candidate) ? candidate : .en
     }
 }
 
@@ -134,14 +157,16 @@ final class DeckData {
     var summaryEN: String
     var summaryZH: String
     var sortOrder: Int
+    var cardCount: Int = 50
 
-    init(_ deck: DeckDefinition, sortOrder: Int) {
+    init(_ deck: DeckDefinition, sortOrder: Int, cardCount: Int) {
         rawID = deck.id.rawValue
         titleEN = deck.title.en
         titleZH = deck.title.zhHans
         summaryEN = deck.summary.en
         summaryZH = deck.summary.zhHans
         self.sortOrder = sortOrder
+        self.cardCount = cardCount
     }
 
     var deckID: DeckID? { DeckID(rawValue: rawID) }
@@ -206,6 +231,54 @@ final class CatalogMetadata {
     init(key: String = "bundled-catalog", version: Int) {
         self.key = key
         self.version = version
+    }
+}
+
+@Model
+final class DeckTranslationData {
+    @Attribute(.unique) var localizationID: String
+    var deckID: String
+    var languageCode: String
+    var title: String
+    var summary: String
+
+    init(deckID: String, language: AppLanguage, title: String, summary: String) {
+        localizationID = "\(deckID):\(language.rawValue)"
+        self.deckID = deckID
+        languageCode = language.rawValue
+        self.title = title
+        self.summary = summary
+    }
+}
+
+@Model
+final class CardTranslationData {
+    @Attribute(.unique) var localizationID: String
+    var cardID: String
+    var languageCode: String
+    var optionA: String
+    var optionB: String
+    var context: String
+    var referenceDisplay: String
+    var referenceURL: String
+
+    init(
+        cardID: String,
+        language: AppLanguage,
+        optionA: String,
+        optionB: String,
+        context: String,
+        referenceDisplay: String,
+        referenceURL: URL
+    ) {
+        localizationID = "\(cardID):\(language.rawValue)"
+        self.cardID = cardID
+        languageCode = language.rawValue
+        self.optionA = optionA
+        self.optionB = optionB
+        self.context = context
+        self.referenceDisplay = referenceDisplay
+        self.referenceURL = referenceURL.absoluteString
     }
 }
 

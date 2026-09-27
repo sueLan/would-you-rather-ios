@@ -59,6 +59,29 @@ final class CatalogTests: XCTestCase {
         }
     }
 
+    func testTranslationRegistryIncludesRequestedLanguagesButReleasesOnlyReviewedOnes() {
+        XCTAssertEqual(AppLanguage.allCases.count, 13)
+        XCTAssertEqual(Set(TranslationRegistry.releaseLanguages), [.en, .zhHans])
+        XCTAssertEqual(
+            Set(TranslationRegistry.awaitingReview),
+            [.es, .pt, .fr, .de, .hi, .ar, .bn, .id, .ja, .ko, .th]
+        )
+        XCTAssertTrue(AppLanguage.ar.isRightToLeft)
+        XCTAssertFalse(AppLanguage.de.isRightToLeft)
+    }
+
+    func testTranslationTemplateContainsEveryDeckAndCardAndRequiresReview() throws {
+        let template = CatalogTranslationBundle.reviewTemplate(
+            for: .de,
+            payload: ContentCatalog.payload
+        )
+        XCTAssertEqual(template.decks.count, 12)
+        XCTAssertEqual(template.cards.count, 600)
+        XCTAssertThrowsError(try template.validate(against: ContentCatalog.payload)) { error in
+            XCTAssertEqual(error as? TranslationValidationError, .notReviewed(.de))
+        }
+    }
+
     @MainActor
     func testHistoryPersistenceAndDeletion() throws {
         let container = try makeContainer()
@@ -87,13 +110,35 @@ final class CatalogTests: XCTestCase {
     func testCatalogSeederPersistsDecksAndCardsOnce() async throws {
         let container = try makeContainer()
         let seeder = CatalogSeeder(modelContainer: container)
-        try await seeder.seedIfNeeded(payload: ContentCatalog.payload, version: 1)
-        try await seeder.seedIfNeeded(payload: ContentCatalog.payload, version: 1)
+
+        try await seeder.seedDecksIfNeeded(
+            decks: ContentCatalog.decks,
+            version: 1
+        )
+        let metadataOnlyCounts = try await CatalogProbe(modelContainer: container).counts()
+        XCTAssertEqual(metadataOnlyCounts.decks, DeckID.allCases.count)
+        XCTAssertEqual(metadataOnlyCounts.cards, 0)
+        XCTAssertEqual(metadataOnlyCounts.deckTranslations, DeckID.allCases.count * 2)
+        XCTAssertEqual(metadataOnlyCounts.cardTranslations, 0)
+        XCTAssertEqual(metadataOnlyCounts.metadata, 1)
+
+        try await seeder.seedIfNeeded(
+            payload: ContentCatalog.payload,
+            deckVersion: 1,
+            cardVersion: 1
+        )
+        try await seeder.seedIfNeeded(
+            payload: ContentCatalog.payload,
+            deckVersion: 1,
+            cardVersion: 1
+        )
 
         let counts = try await CatalogProbe(modelContainer: container).counts()
         XCTAssertEqual(counts.decks, DeckID.allCases.count)
         XCTAssertEqual(counts.cards, DeckID.allCases.count * 50)
-        XCTAssertEqual(counts.metadata, 1)
+        XCTAssertEqual(counts.deckTranslations, DeckID.allCases.count * 2)
+        XCTAssertEqual(counts.cardTranslations, DeckID.allCases.count * 50 * 2)
+        XCTAssertEqual(counts.metadata, 2)
     }
 
     @MainActor
@@ -102,6 +147,8 @@ final class CatalogTests: XCTestCase {
         return try ModelContainer(
             for: DeckData.self,
             CardData.self,
+            DeckTranslationData.self,
+            CardTranslationData.self,
             ChoiceRecord.self,
             CatalogMetadata.self,
             configurations: configuration
@@ -111,10 +158,18 @@ final class CatalogTests: XCTestCase {
 
 @ModelActor
 private actor CatalogProbe {
-    func counts() throws -> (decks: Int, cards: Int, metadata: Int) {
+    func counts() throws -> (
+        decks: Int,
+        cards: Int,
+        deckTranslations: Int,
+        cardTranslations: Int,
+        metadata: Int
+    ) {
         (
             try modelContext.fetchCount(FetchDescriptor<DeckData>()),
             try modelContext.fetchCount(FetchDescriptor<CardData>()),
+            try modelContext.fetchCount(FetchDescriptor<DeckTranslationData>()),
+            try modelContext.fetchCount(FetchDescriptor<CardTranslationData>()),
             try modelContext.fetchCount(FetchDescriptor<CatalogMetadata>())
         )
     }

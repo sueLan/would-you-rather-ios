@@ -20,7 +20,7 @@ struct SettingsView: View {
 
                 Section(t(.language)) {
                     Picker(t(.language), selection: $languageRawValue) {
-                        ForEach(AppLanguage.allCases) { language in
+                        ForEach(TranslationRegistry.releaseLanguages) { language in
                             Text(language.displayName).tag(language.rawValue)
                         }
                     }

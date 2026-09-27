@@ -9,7 +9,7 @@ enum Strings {
         case shuffleAgain, anotherDeck, yourChoice, noHistory, noHistoryBody, clearAll
         case clearConfirm, cancel, language, about, privacy, privacyBody
         case appDescription, linkFailed, retry, copyLink, copied, choiceSaved
-        case unableToSave, done, ok, version
+        case unableToSave, dataUnavailable, temporaryStorageBody, done, ok, version
 
         var en: String {
             switch self {
@@ -45,6 +45,8 @@ enum Strings {
             case .copied: "Link copied"
             case .choiceSaved: "Choice saved"
             case .unableToSave: "Unable to save"
+            case .dataUnavailable: "Data unavailable"
+            case .temporaryStorageBody: "The permanent data store could not be opened. You can continue for this session, but new history may not be preserved."
             case .done: "Done"
             case .ok: "OK"
             case .version: "Version"
@@ -85,6 +87,8 @@ enum Strings {
             case .copied: "链接已复制"
             case .choiceSaved: "选择已保存"
             case .unableToSave: "无法保存"
+            case .dataUnavailable: "数据不可用"
+            case .temporaryStorageBody: "无法打开永久数据存储。你仍可在本次使用期间继续操作，但新的历史记录可能不会被保留。"
             case .done: "完成"
             case .ok: "好"
             case .version: "版本"
