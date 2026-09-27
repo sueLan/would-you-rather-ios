@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import WouldYouRather
 
 final class CatalogTests: XCTestCase {
@@ -59,88 +60,62 @@ final class CatalogTests: XCTestCase {
     }
 
     @MainActor
-    func testHistoryStoreRoundTripAndDeletion() async throws {
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("history-\(UUID().uuidString).json")
+    func testHistoryPersistenceAndDeletion() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
         let card = try XCTUnwrap(ContentCatalog.payload.cards.first)
         let record = ChoiceRecord(
             id: UUID(),
             card: card,
-            deckTitle: "Love",
             option: .a,
             language: .en,
             chosenAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
 
-        let store = ChoiceHistoryStore(fileURL: fileURL)
-        try await store.append(record)
-        XCTAssertEqual(store.records, [record])
+        context.insert(record)
+        try context.save()
+        var saved = try context.fetch(FetchDescriptor<ChoiceRecord>())
+        XCTAssertEqual(saved.map(\.id), [record.id])
 
-        let reloaded = ChoiceHistoryStore(fileURL: fileURL)
-        await reloaded.load()
-        XCTAssertEqual(reloaded.records, [record])
-        try await reloaded.delete(id: record.id)
-        XCTAssertTrue(reloaded.records.isEmpty)
-        try? FileManager.default.removeItem(at: fileURL)
+        context.delete(record)
+        try context.save()
+        saved = try context.fetch(FetchDescriptor<ChoiceRecord>())
+        XCTAssertTrue(saved.isEmpty)
     }
 
     @MainActor
-    func testHistoryMutationsWaitForLoadAndPersistConcurrentAppends() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let fileURL = directory.appendingPathComponent("history.json")
-        let card = try XCTUnwrap(ContentCatalog.payload.cards.first)
-        let records = (0..<20).map { index in
-            ChoiceRecord(id: UUID(), card: card, deckTitle: "Love", option: .a,
-                         language: .en, chosenAt: Date(timeIntervalSince1970: Double(index)))
-        }
-        let original = ChoiceHistoryStore(fileURL: fileURL)
-        try await original.append(records[0])
+    func testCatalogSeederPersistsDecksAndCardsOnce() async throws {
+        let container = try makeContainer()
+        let seeder = CatalogSeeder(modelContainer: container)
+        try await seeder.seedIfNeeded(payload: ContentCatalog.payload, version: 1)
+        try await seeder.seedIfNeeded(payload: ContentCatalog.payload, version: 1)
 
-        let store = ChoiceHistoryStore(fileURL: fileURL)
-        // Submit mutations immediately, without explicitly awaiting initialization.
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for record in records.dropFirst() {
-                group.addTask { try await store.append(record) }
-            }
-            try await group.waitForAll()
-        }
-        XCTAssertEqual(Set(store.records), Set(records))
-        let reloaded = ChoiceHistoryStore(fileURL: fileURL)
-        await reloaded.load()
-        XCTAssertEqual(Set(reloaded.records), Set(records))
-
-        try await store.deleteAll()
-        let cleared = ChoiceHistoryStore(fileURL: fileURL)
-        await cleared.load()
-        XCTAssertTrue(cleared.records.isEmpty)
+        let counts = try await CatalogProbe(modelContainer: container).counts()
+        XCTAssertEqual(counts.decks, DeckID.allCases.count)
+        XCTAssertEqual(counts.cards, DeckID.allCases.count * 50)
+        XCTAssertEqual(counts.metadata, 1)
     }
 
     @MainActor
-    func testFailedSavePreservesRecordsAndAllowsLaterMutation() async throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let fileURL = directory.appendingPathComponent("history.json")
-        let card = try XCTUnwrap(ContentCatalog.payload.cards.first)
-        let record = ChoiceRecord(card: card, deckTitle: "Love", option: .a, language: .en)
-        let store = ChoiceHistoryStore(fileURL: fileURL)
-        try await store.append(record)
-
-        // A regular file in place of the parent directory reliably prevents saving.
-        try FileManager.default.removeItem(at: directory)
-        try Data().write(to: directory)
-        do {
-            try await store.deleteAll()
-            XCTFail("Saving through a regular file should fail")
-        } catch {
-            XCTAssertEqual(store.records, [record])
-        }
-        try FileManager.default.removeItem(at: directory)
-        try await store.delete(id: record.id)
-        XCTAssertTrue(store.records.isEmpty)
-        let reloaded = ChoiceHistoryStore(fileURL: fileURL)
-        await reloaded.load()
-        XCTAssertTrue(reloaded.records.isEmpty)
+    private func makeContainer() throws -> ModelContainer {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try ModelContainer(
+            for: DeckData.self,
+            CardData.self,
+            ChoiceRecord.self,
+            CatalogMetadata.self,
+            configurations: configuration
+        )
     }
+}
 
+@ModelActor
+private actor CatalogProbe {
+    func counts() throws -> (decks: Int, cards: Int, metadata: Int) {
+        (
+            try modelContext.fetchCount(FetchDescriptor<DeckData>()),
+            try modelContext.fetchCount(FetchDescriptor<CardData>()),
+            try modelContext.fetchCount(FetchDescriptor<CatalogMetadata>())
+        )
+    }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import SwiftUI
 
 enum AppLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
@@ -7,6 +8,7 @@ enum AppLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
     var displayName: String { self == .en ? "English" : "简体中文" }
+    static let storageKey = "preferred-language"
 
     static var systemDefault: AppLanguage {
         Locale.preferredLanguages.first?.hasPrefix("zh") == true ? .zhHans : .en
@@ -45,22 +47,6 @@ enum DeckID: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var accent: Color {
-        switch self {
-        case .love: Color(red: 0.68, green: 0.29, blue: 0.34)
-        case .faith: Color(red: 0.72, green: 0.53, blue: 0.20)
-        case .connection: Color(red: 0.20, green: 0.48, blue: 0.51)
-        case .reflection: Color(red: 0.36, green: 0.35, blue: 0.57)
-        case .wisdom: Color(red: 0.50, green: 0.39, blue: 0.20)
-        case .prayer: Color(red: 0.33, green: 0.42, blue: 0.66)
-        case .purpose: Color(red: 0.53, green: 0.30, blue: 0.43)
-        case .courage: Color(red: 0.66, green: 0.33, blue: 0.22)
-        case .gratitude: Color(red: 0.72, green: 0.48, blue: 0.16)
-        case .forgiveness: Color(red: 0.28, green: 0.52, blue: 0.40)
-        case .service: Color(red: 0.31, green: 0.43, blue: 0.48)
-        case .hope: Color(red: 0.42, green: 0.47, blue: 0.68)
-        }
-    }
 }
 
 struct DeckDefinition: Codable, Identifiable, Hashable, Sendable {
@@ -97,25 +83,25 @@ enum ChoiceOption: String, Codable, Sendable {
     case a, b
 }
 
-struct ChoiceRecord: Codable, Identifiable, Hashable, Sendable {
-    let id: UUID
-    let cardID: String
-    let deckID: String
-    let selectedOption: String
-    let chosenAt: Date
-    let localeIdentifier: String
-    let questionSnapshot: String
-    let optionASnapshot: String
-    let optionBSnapshot: String
-    let answerSnapshot: String
-    let contextSnapshot: String
-    let referenceDisplay: String
-    let referenceURL: String
+@Model
+final class ChoiceRecord {
+    @Attribute(.unique) var id: UUID
+    var cardID: String
+    var deckID: String
+    var selectedOption: String
+    var chosenAt: Date
+    var localeIdentifier: String
+    var questionSnapshot: String
+    var optionASnapshot: String
+    var optionBSnapshot: String
+    var answerSnapshot: String
+    var contextSnapshot: String
+    var referenceDisplay: String
+    var referenceURL: String
 
     init(
         id: UUID = UUID(),
         card: QuestionCard,
-        deckTitle: String,
         option: ChoiceOption,
         language: AppLanguage,
         chosenAt: Date = .now
@@ -140,6 +126,89 @@ struct ChoiceRecord: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+@Model
+final class DeckData {
+    @Attribute(.unique) var rawID: String
+    var titleEN: String
+    var titleZH: String
+    var summaryEN: String
+    var summaryZH: String
+    var sortOrder: Int
+
+    init(_ deck: DeckDefinition, sortOrder: Int) {
+        rawID = deck.id.rawValue
+        titleEN = deck.title.en
+        titleZH = deck.title.zhHans
+        summaryEN = deck.summary.en
+        summaryZH = deck.summary.zhHans
+        self.sortOrder = sortOrder
+    }
+
+    var deckID: DeckID? { DeckID(rawValue: rawID) }
+    func title(for language: AppLanguage) -> String { language == .en ? titleEN : titleZH }
+    func summary(for language: AppLanguage) -> String { language == .en ? summaryEN : summaryZH }
+}
+
+@Model
+final class CardData {
+    @Attribute(.unique) var cardID: String
+    var deckRawValue: String
+    var optionAEN: String
+    var optionAZH: String
+    var optionBEN: String
+    var optionBZH: String
+    var contextEN: String
+    var contextZH: String
+    var referenceEN: String
+    var referenceZH: String
+    var englishURL: String
+    var chineseURL: String
+
+    init(_ card: QuestionCard) {
+        cardID = card.id
+        deckRawValue = card.deckID.rawValue
+        optionAEN = card.optionA.en
+        optionAZH = card.optionA.zhHans
+        optionBEN = card.optionB.en
+        optionBZH = card.optionB.zhHans
+        contextEN = card.context.en
+        contextZH = card.context.zhHans
+        referenceEN = card.reference.display.en
+        referenceZH = card.reference.display.zhHans
+        englishURL = card.reference.englishURL.absoluteString
+        chineseURL = card.reference.chineseURL.absoluteString
+    }
+
+    var questionCard: QuestionCard? {
+        guard let deckID = DeckID(rawValue: deckRawValue),
+              let englishURL = URL(string: englishURL),
+              let chineseURL = URL(string: chineseURL) else { return nil }
+        return QuestionCard(
+            id: cardID,
+            deckID: deckID,
+            optionA: .init(en: optionAEN, zhHans: optionAZH),
+            optionB: .init(en: optionBEN, zhHans: optionBZH),
+            context: .init(en: contextEN, zhHans: contextZH),
+            reference: .init(
+                display: .init(en: referenceEN, zhHans: referenceZH),
+                englishURL: englishURL,
+                chineseURL: chineseURL
+            )
+        )
+    }
+}
+
+@Model
+final class CatalogMetadata {
+    @Attribute(.unique) var key: String
+    var version: Int
+
+    init(key: String = "bundled-catalog", version: Int) {
+        self.key = key
+        self.version = version
+    }
+}
+
 extension Color {
     static let faithIvory = Color(red: 247 / 255, green: 241 / 255, blue: 231 / 255)
     static let faithIvoryDeep = Color(red: 238 / 255, green: 226 / 255, blue: 208 / 255)
@@ -152,7 +221,4 @@ extension Color {
     static let faithGoldLight = Color(red: 214 / 255, green: 183 / 255, blue: 127 / 255)
     static let faithOlive = Color(red: 91 / 255, green: 90 / 255, blue: 67 / 255)
 
-    // Compatibility aliases used by existing components.
-    static let faithNavy = faithBrown
-    static let faithInk = faithEspresso
 }

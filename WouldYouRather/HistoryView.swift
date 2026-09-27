@@ -1,11 +1,14 @@
 import SwiftUI
+import SwiftData
 
 struct HistoryView: View {
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var historyStore: ChoiceHistoryStore
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ChoiceRecord.chosenAt, order: .reverse) private var records: [ChoiceRecord]
+    @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
     @State private var showClearConfirmation = false
+    @State private var saveError: String?
 
-    private var records: [ChoiceRecord] { historyStore.records }
+    private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
     private var groupedRecords: [(day: Date, records: [ChoiceRecord])] {
         let calendar = Calendar.current
         let groups = Dictionary(grouping: records) { calendar.startOfDay(for: $0.chosenAt) }
@@ -36,12 +39,7 @@ struct HistoryView: View {
                                     }
                                 }
                                 .onDelete { offsets in
-                                    let ids = offsets.map { group.records[$0].id }
-                                    Task {
-                                        for id in ids {
-                                            try? await historyStore.delete(id: id)
-                                        }
-                                    }
+                                    delete(group.records, at: offsets)
                                 }
                             }
                         }
@@ -64,13 +62,37 @@ struct HistoryView: View {
             Button(t(.clearAll), role: .destructive) { clearAll() }
             Button(t(.cancel), role: .cancel) {}
         }
+        .alert(t(.unableToSave), isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button(t(.ok), role: .cancel) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
     }
 
     private func clearAll() {
-        Task { try? await historyStore.deleteAll() }
+        do {
+            try modelContext.delete(model: ChoiceRecord.self)
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            saveError = error.localizedDescription
+        }
     }
 
-    private func t(_ key: Strings.Key) -> String { Strings.text(key, appState.language) }
+    private func delete(_ records: [ChoiceRecord], at offsets: IndexSet) {
+        do {
+            for offset in offsets { modelContext.delete(records[offset]) }
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            saveError = error.localizedDescription
+        }
+    }
+
+    private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
 }
 
 private struct HistoryRow: View {
@@ -107,9 +129,10 @@ private struct HistoryRow: View {
 }
 
 private struct HistoryDetailView: View {
-    @EnvironmentObject private var appState: AppState
     @Environment(\.openURL) private var openURL
+    @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
     let record: ChoiceRecord
+    private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
 
     var body: some View {
         ZStack {
@@ -178,5 +201,5 @@ private struct HistoryDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func t(_ key: Strings.Key) -> String { Strings.text(key, appState.language) }
+    private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
 }

@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var appState: AppState
+    @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
+    private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
 
     var body: some View {
         ZStack {
@@ -18,9 +19,9 @@ struct SettingsView: View {
                 }
 
                 Section(t(.language)) {
-                    Picker(t(.language), selection: $appState.language) {
+                    Picker(t(.language), selection: $languageRawValue) {
                         ForEach(AppLanguage.allCases) { language in
-                            Text(language.displayName).tag(language)
+                            Text(language.displayName).tag(language.rawValue)
                         }
                     }
                     .pickerStyle(.inline)
@@ -51,7 +52,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Text(appState.language == .en
+                    Text(language == .en
                          ? "Bible references open Bible.com. Scripture text is not reproduced in this app."
                          : "圣经经文链接会打开 Bible.com。本应用不复制圣经译文正文。")
                         .font(.caption)
@@ -64,5 +65,5 @@ struct SettingsView: View {
         .toolbarBackground(Color.faithPaper.opacity(0.88), for: .navigationBar)
     }
 
-    private func t(_ key: Strings.Key) -> String { Strings.text(key, appState.language) }
+    private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
 }

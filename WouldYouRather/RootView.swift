@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct RootView: View {
     var body: some View {
@@ -10,8 +11,11 @@ struct RootView: View {
 }
 
 struct DeckListView: View {
-    @EnvironmentObject private var appState: AppState
+    @Query(sort: \DeckData.sortOrder) private var decks: [DeckData]
+    @Query private var cards: [CardData]
+    @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 18)]
+    private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
 
     var body: some View {
         ZStack {
@@ -20,7 +24,7 @@ struct DeckListView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 14) {
-                        BrandLockupView(language: appState.language)
+                        BrandLockupView(language: language)
 
                         Spacer(minLength: 8)
 
@@ -44,11 +48,17 @@ struct DeckListView: View {
                         .foregroundStyle(Color.faithGold)
 
                     LazyVGrid(columns: columns, spacing: 18) {
-                        ForEach(appState.catalog.decks) { deck in
-                            NavigationLink(value: deck.id) {
-                                DeckTile(deck: deck, cardCount: appState.cards(in: deck.id).count)
+                        ForEach(decks) { deck in
+                            if let deckID = deck.deckID {
+                                NavigationLink(value: deckID) {
+                                    DeckTile(
+                                        deck: deck,
+                                        cardCount: cards.lazy.filter { $0.deckRawValue == deck.rawID }.count,
+                                        language: language
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -63,17 +73,17 @@ struct DeckListView: View {
         }
     }
 
-    private func t(_ key: Strings.Key) -> String { Strings.text(key, appState.language) }
+    private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
 }
 
 private struct DeckTile: View {
-    @EnvironmentObject private var appState: AppState
-    let deck: DeckDefinition
+    let deck: DeckData
     let cardCount: Int
+    let language: AppLanguage
 
     var body: some View {
         HStack(spacing: 18) {
-            Image(systemName: deck.id.symbol)
+            Image(systemName: deck.deckID?.symbol ?? "rectangle.stack")
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(Color.faithGold)
                 .frame(width: 54, height: 54)
@@ -83,14 +93,14 @@ private struct DeckTile: View {
                 }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(deck.title.value(for: appState.language))
+                Text(deck.title(for: language))
                     .font(.system(.title3, design: .serif, weight: .semibold))
                     .foregroundStyle(Color.faithEspresso)
-                Text(deck.summary.value(for: appState.language))
+                Text(deck.summary(for: language))
                     .font(.subheadline)
                     .foregroundStyle(Color.faithBrownSoft)
                     .lineLimit(2)
-                Text(Strings.text(.cards(cardCount), appState.language))
+                Text(Strings.text(.cards(cardCount), language))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.faithGold)
             }
@@ -109,15 +119,8 @@ private struct DeckTile: View {
 private struct DecksPreview: PreviewProvider {
     @MainActor
     static var previews: some View {
-        let historyStore = ChoiceHistoryStore(
-            fileURL: FileManager.default.temporaryDirectory
-                .appendingPathComponent("preview-history.json")
-        )
-        let appState = AppState(historyStore: historyStore)
-
         RootView()
-            .environmentObject(appState)
-            .environmentObject(historyStore)
+            .modelContainer(for: [DeckData.self, CardData.self, ChoiceRecord.self, CatalogMetadata.self], inMemory: true)
             .previewDisplayName("Decks")
     }
 }

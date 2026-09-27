@@ -1,15 +1,35 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct WouldYouRatherApp: App {
-    @StateObject private var appState = AppState()
+    private let modelContainer: ModelContainer
+
+    init() {
+        do {
+            modelContainer = try ModelContainer(
+                for: DeckData.self,
+                CardData.self,
+                ChoiceRecord.self,
+                CatalogMetadata.self
+            )
+        } catch {
+            fatalError("Unable to create the data store: \(error)")
+        }
+    }
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environmentObject(appState)
-                .environmentObject(appState.historyStore)
                 .preferredColorScheme(.light)
+                .task {
+                    let seeder = CatalogSeeder(modelContainer: modelContainer)
+                    try? await seeder.seedIfNeeded(
+                        payload: ContentCatalog.payload,
+                        version: CatalogSeeder.currentVersion
+                    )
+                }
         }
+        .modelContainer(modelContainer)
     }
 }

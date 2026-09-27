@@ -1,15 +1,13 @@
-import Foundation
-
 enum Strings {
     static func text(_ key: Key, _ language: AppLanguage) -> String {
         language == .en ? key.en : key.zhHans
     }
 
     enum Key {
-        case decks, history, settings, title, subtitle, cards(Int), wouldYouRather, or
-        case biblicalContext, exploreStory, swipeHint, openInBible, previous, next, deckComplete, deckCompleteBody
+        case decks, history, settings, title, subtitle, cards(Int), or
+        case biblicalContext, exploreStory, swipeHint, openInBible, deckComplete, deckCompleteBody
         case shuffleAgain, anotherDeck, yourChoice, noHistory, noHistoryBody, clearAll
-        case clearConfirm, cancel, delete, language, about, privacy, privacyBody
+        case clearConfirm, cancel, language, about, privacy, privacyBody
         case appDescription, linkFailed, retry, copyLink, copied, choiceSaved
         case unableToSave, done, ok, version
 
@@ -21,14 +19,11 @@ enum Strings {
             case .title: "Would You Rather"
             case .subtitle: "Questions for faith-filled conversation"
             case .cards(let count): "\(count) cards"
-            case .wouldYouRather: "WOULD YOU RATHER"
             case .or: "OR"
             case .biblicalContext: "Biblical Context"
             case .exploreStory: "Explore the story"
             case .swipeHint: "Swipe to explore the deck"
             case .openInBible: "Open in Bible"
-            case .previous: "Previous"
-            case .next: "Next"
             case .deckComplete: "Deck complete"
             case .deckCompleteBody: "You made space for fifty meaningful choices."
             case .shuffleAgain: "Shuffle Again"
@@ -39,7 +34,6 @@ enum Strings {
             case .clearAll: "Clear All"
             case .clearConfirm: "Delete every saved choice? This cannot be undone."
             case .cancel: "Cancel"
-            case .delete: "Delete"
             case .language: "Language"
             case .about: "About"
             case .privacy: "Privacy"
@@ -65,14 +59,11 @@ enum Strings {
             case .title: "你愿意选择"
             case .subtitle: "开启有信仰深度的对话"
             case .cards(let count): "\(count) 张卡片"
-            case .wouldYouRather: "你愿意选择"
             case .or: "还是"
             case .biblicalContext: "圣经背景"
             case .exploreStory: "了解故事背景"
             case .swipeHint: "左右滑动浏览卡组"
             case .openInBible: "在圣经中打开"
-            case .previous: "上一张"
-            case .next: "下一张"
             case .deckComplete: "本组已完成"
             case .deckCompleteBody: "你已经认真思考了五十个有意义的选择。"
             case .shuffleAgain: "重新洗牌"
@@ -83,7 +74,6 @@ enum Strings {
             case .clearAll: "全部清除"
             case .clearConfirm: "要删除所有已保存的选择吗？此操作无法撤销。"
             case .cancel: "取消"
-            case .delete: "删除"
             case .language: "语言"
             case .about: "关于"
             case .privacy: "隐私"

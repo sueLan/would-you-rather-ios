@@ -1,11 +1,14 @@
 import SwiftUI
+import SwiftData
 import UIKit
 
 struct CardSessionView: View {
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var historyStore: ChoiceHistoryStore
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Query private var persistedCards: [CardData]
+    @Query private var persistedDecks: [DeckData]
+    @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
 
     let deckID: DeckID
     @State private var cardIDs: [String] = []
@@ -19,10 +22,11 @@ struct CardSessionView: View {
     @State private var contextCard: QuestionCard?
     @State private var saveError: String?
 
-    private var deck: DeckDefinition { appState.deck(deckID) }
+    private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
+    private var deck: DeckData? { persistedDecks.first { $0.rawID == deckID.rawValue } }
     private var currentCard: QuestionCard? {
         guard cardIDs.indices.contains(index) else { return nil }
-        return appState.catalog.cards.first { $0.id == cardIDs[index] }
+        return persistedCards.first { $0.cardID == cardIDs[index] }?.questionCard
     }
 
     var body: some View {
@@ -37,14 +41,16 @@ struct CardSessionView: View {
                 cardExperience(card)
             }
         }
-        .navigationTitle(deck.title.value(for: appState.language))
+        .navigationTitle(deck?.title(for: language) ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.light, for: .navigationBar)
         .toolbarBackground(Color.faithPaper.opacity(0.78), for: .navigationBar)
         .onAppear { if cardIDs.isEmpty { shuffle() } }
+        .onChange(of: persistedCards.count) { _, _ in
+            if cardIDs.isEmpty { shuffle() }
+        }
         .sheet(item: $contextCard) { card in
             BiblicalContextView(card: card)
-                .environmentObject(appState)
         }
         .alert(t(.unableToSave), isPresented: Binding(
             get: { saveError != nil },
@@ -62,7 +68,7 @@ struct CardSessionView: View {
             VStack(spacing: 12) {
                 HStack {
                     Label {
-                        Text(deck.title.value(for: appState.language).uppercased())
+                        Text((deck?.title(for: language) ?? "").uppercased())
                     } icon: {
                         Image(systemName: "sparkle")
                             .foregroundStyle(Color.faithGold)
@@ -86,7 +92,7 @@ struct CardSessionView: View {
 
                     ChoiceCardView(
                         card: card,
-                        language: appState.language,
+                        language: language,
                         selectedOption: selectedOption,
                         onChoose: choose
                     )
@@ -205,14 +211,15 @@ struct CardSessionView: View {
 
         let record = ChoiceRecord(
             card: card,
-            deckTitle: deck.title.value(for: appState.language),
             option: option,
-            language: appState.language
+            language: language
         )
         Task { @MainActor in
             do {
-                try await historyStore.append(record)
+                modelContext.insert(record)
+                try modelContext.save()
             } catch {
+                modelContext.rollback()
                 selectedOption = nil
                 saveError = error.localizedDescription
                 return
@@ -275,7 +282,10 @@ struct CardSessionView: View {
     }
 
     private func shuffle() {
-        cardIDs = appState.cards(in: deckID).map(\.id).shuffled()
+        cardIDs = persistedCards
+            .filter { $0.deckRawValue == deckID.rawValue }
+            .map(\.cardID)
+            .shuffled()
         index = 0
         selectedOption = nil
         isTransitioning = false
@@ -284,7 +294,7 @@ struct CardSessionView: View {
         cardScale = 1
     }
 
-    private func t(_ key: Strings.Key) -> String { Strings.text(key, appState.language) }
+    private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
 }
 
 private struct CardDeckBackdrop: View {
@@ -391,13 +401,16 @@ private struct ChoiceCardView: View {
 }
 
 struct BiblicalContextView: View {
-    @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Query private var persistedDecks: [DeckData]
+    @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
     let card: QuestionCard
     @State private var linkFailed = false
     @State private var copied = false
     @State private var failedReferenceURL: URL?
+    private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
+    private var deck: DeckData? { persistedDecks.first { $0.rawID == card.deckID.rawValue } }
 
     var body: some View {
         NavigationStack {
@@ -408,11 +421,11 @@ struct BiblicalContextView: View {
                         .tracking(1.5)
                         .foregroundStyle(Color.faithGold)
 
-                    Text(appState.deck(card.deckID).title.value(for: appState.language))
+                    Text(deck?.title(for: language) ?? "")
                         .font(.system(.largeTitle, design: .serif, weight: .regular))
                         .foregroundStyle(Color.faithEspresso)
 
-                    Text(card.context.value(for: appState.language))
+                    Text(card.context.value(for: language))
                         .font(.body)
                         .foregroundStyle(Color.faithBrown)
                         .lineSpacing(7)
@@ -425,7 +438,7 @@ struct BiblicalContextView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "book.closed")
                                         .foregroundStyle(Color.faithGold)
-                                    Text(reference.display.value(for: appState.language))
+                                    Text(reference.display.value(for: language))
                                     Image(systemName: "arrow.up.right")
                                         .font(.caption2)
                                         .foregroundStyle(Color.faithBrownSoft)
@@ -438,7 +451,7 @@ struct BiblicalContextView: View {
                                 .overlay { Capsule().stroke(Color.faithGold.opacity(0.30), lineWidth: 1) }
                             }
                             .buttonStyle(.plain)
-                            .accessibilityHint(appState.language == .en
+                            .accessibilityHint(language == .en
                                                ? "Opens this passage in Bible.com"
                                                : "在 Bible.com 中打开这段经文")
                         }
@@ -472,9 +485,9 @@ struct BiblicalContextView: View {
     }
 
     private func openReference(_ reference: BibleReference? = nil) {
-        let url = reference?.url(for: appState.language)
+        let url = reference?.url(for: language)
             ?? failedReferenceURL
-            ?? card.reference.url(for: appState.language)
+            ?? card.reference.url(for: language)
         openURL(url) { accepted in
             if !accepted {
                 failedReferenceURL = url
@@ -483,23 +496,16 @@ struct BiblicalContextView: View {
         }
     }
 
-    private func t(_ key: Strings.Key) -> String { Strings.text(key, appState.language) }
+    private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
 }
 
 private struct LoveSessionPreview: PreviewProvider {
     @MainActor
     static var previews: some View {
-        let historyStore = ChoiceHistoryStore(
-            fileURL: FileManager.default.temporaryDirectory
-                .appendingPathComponent("preview-card-history.json")
-        )
-        let appState = AppState(historyStore: historyStore)
-
         NavigationStack {
             CardSessionView(deckID: .love)
         }
-        .environmentObject(appState)
-        .environmentObject(historyStore)
+        .modelContainer(for: [DeckData.self, CardData.self, ChoiceRecord.self, CatalogMetadata.self], inMemory: true)
         .previewDisplayName("Love Session")
     }
 }
