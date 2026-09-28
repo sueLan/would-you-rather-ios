@@ -1,6 +1,6 @@
 enum Strings {
     static func text(_ key: Key, _ language: AppLanguage) -> String {
-        language == .en ? key.en : key.zhHans
+        language == .zhHans ? key.zhHans : key.en
     }
 
     enum Key {
@@ -9,7 +9,8 @@ enum Strings {
         case shuffleAgain, anotherDeck, yourChoice, noHistory, noHistoryBody, clearAll
         case clearConfirm, cancel, language, about, privacy, privacyBody
         case appDescription, linkFailed, retry, copyLink, copied, choiceSaved
-        case unableToSave, dataUnavailable, temporaryStorageBody, done, ok, version
+        case unableToSave, dataUnavailable, temporaryStorageBody, translationPending
+        case selected, translatedByApple, translationFailed, done, ok, version
 
         var en: String {
             switch self {
@@ -37,7 +38,7 @@ enum Strings {
             case .language: "Language"
             case .about: "About"
             case .privacy: "Privacy"
-            case .privacyBody: "Your choices stay on this device. The app only connects to the internet when you open a Bible reference."
+            case .privacyBody: "Your choices and translated cards stay on this device. Bible references open an external website. Apple Translation may download language resources."
             case .appDescription: "600 Scripture-centered questions across twelve themes for faith and life."
             case .linkFailed: "The Bible link could not be opened."
             case .retry: "Retry"
@@ -47,6 +48,10 @@ enum Strings {
             case .unableToSave: "Unable to save"
             case .dataUnavailable: "Data unavailable"
             case .temporaryStorageBody: "The permanent data store could not be opened. You can continue for this session, but new history may not be preserved."
+            case .translationPending: "Translation pending"
+            case .selected: "Selected"
+            case .translatedByApple: "Translated by Apple"
+            case .translationFailed: "Apple Translation is unavailable. Check the downloaded language or try again on a physical device."
             case .done: "Done"
             case .ok: "OK"
             case .version: "Version"
@@ -79,7 +84,7 @@ enum Strings {
             case .language: "语言"
             case .about: "关于"
             case .privacy: "隐私"
-            case .privacyBody: "你的选择只保存在此设备上。只有当你打开圣经经文时，应用才会连接网络。"
+            case .privacyBody: "你的选择和翻译后的卡片只保存在此设备上。圣经经文会通过外部网站打开，Apple 翻译可能会下载语言资源。"
             case .appDescription: "十二个信仰与生活主题，共 600 个以圣经为中心的问题。"
             case .linkFailed: "无法打开圣经链接。"
             case .retry: "重试"
@@ -89,6 +94,10 @@ enum Strings {
             case .unableToSave: "无法保存"
             case .dataUnavailable: "数据不可用"
             case .temporaryStorageBody: "无法打开永久数据存储。你仍可在本次使用期间继续操作，但新的历史记录可能不会被保留。"
+            case .translationPending: "翻译待审核"
+            case .selected: "已选择"
+            case .translatedByApple: "由 Apple 翻译"
+            case .translationFailed: "Apple 翻译暂时不可用。请检查语言包，或在实体设备上重试。"
             case .done: "完成"
             case .ok: "好"
             case .version: "版本"

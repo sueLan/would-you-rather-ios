@@ -8,6 +8,8 @@ struct CardSessionView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query private var persistedCards: [CardData]
     @Query private var persistedDecks: [DeckData]
+    @Query private var cardTranslations: [CardTranslationData]
+    @Query private var deckTranslations: [DeckTranslationData]
     @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
 
     let deckID: DeckID
@@ -21,12 +23,20 @@ struct CardSessionView: View {
     @State private var isTransitioning = false
     @State private var contextCard: QuestionCard?
     @State private var saveError: String?
+    @State private var dynamicTranslationFailed = false
+    @State private var translationAttempt = 0
 
     private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
     private var deck: DeckData? { persistedDecks.first { $0.rawID == deckID.rawValue } }
+    private var deckTranslation: DeckTranslationData? {
+        deckTranslations.first {
+            $0.deckID == deckID.rawValue && $0.languageCode == language.rawValue
+        }
+    }
     private var currentCard: QuestionCard? {
         guard cardIDs.indices.contains(index) else { return nil }
-        return persistedCards.first { $0.cardID == cardIDs[index] }?.questionCard
+        guard let card = persistedCards.first(where: { $0.cardID == cardIDs[index] }) else { return nil }
+        return card.questionCard(using: translation(for: card))
     }
 
     var body: some View {
@@ -41,7 +51,7 @@ struct CardSessionView: View {
                 cardExperience(card)
             }
         }
-        .navigationTitle(deck?.title(for: language) ?? "")
+        .navigationTitle(deckTranslation?.title ?? deck?.title(for: language) ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.light, for: .navigationBar)
         .toolbarBackground(Color.faithPaper.opacity(0.78), for: .navigationBar)
@@ -60,6 +70,7 @@ struct CardSessionView: View {
         } message: {
             Text(saveError ?? "")
         }
+        .background { dynamicCardTranslationTask }
     }
 
     @ViewBuilder
@@ -68,7 +79,7 @@ struct CardSessionView: View {
             VStack(spacing: 12) {
                 HStack {
                     Label {
-                        Text((deck?.title(for: language) ?? "").uppercased())
+                        Text((deckTranslation?.title ?? deck?.title(for: language) ?? "").uppercased())
                     } icon: {
                         Image(systemName: "sparkle")
                             .foregroundStyle(Color.faithGold)
@@ -86,6 +97,24 @@ struct CardSessionView: View {
                 ProgressView(value: Double(index + 1), total: Double(cardIDs.count))
                     .tint(Color.faithGold)
                     .scaleEffect(y: 0.55)
+
+                if !language.isBundled, translation(for: card.id) != nil {
+                    Label(t(.translatedByApple), systemImage: "translate")
+                        .font(.caption2)
+                        .foregroundStyle(Color.faithBrownSoft)
+                }
+
+                if dynamicTranslationFailed {
+                    Button {
+                        dynamicTranslationFailed = false
+                        translationAttempt += 1
+                    } label: {
+                        Label(t(.translationFailed), systemImage: "arrow.clockwise")
+                            .font(.caption2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .foregroundStyle(Color.faithBrown)
+                }
 
                 ZStack {
                     CardDeckBackdrop()
@@ -294,6 +323,72 @@ struct CardSessionView: View {
         cardScale = 1
     }
 
+    private func translation(for card: CardData) -> CardTranslationData? {
+        cardTranslations.first {
+            $0.cardID == card.cardID && $0.languageCode == language.rawValue
+        }
+    }
+
+    private func translation(for cardID: String) -> CardTranslationData? {
+        cardTranslations.first {
+            $0.cardID == cardID && $0.languageCode == language.rawValue
+        }
+    }
+
+    @ViewBuilder
+    private var dynamicCardTranslationTask: some View {
+        if #available(iOS 18.0, *), !language.isBundled {
+            AppleTranslationTask(
+                targetLanguage: language,
+                requests: missingCardTranslationRequests,
+                trigger: translationAttempt,
+                onCompletion: saveCardTranslations,
+                onFailure: { _ in dynamicTranslationFailed = true }
+            )
+        }
+    }
+
+    private var missingCardTranslationRequests: [AppleTranslationRequest] {
+        persistedCards
+            .filter { $0.deckRawValue == deckID.rawValue && translation(for: $0) == nil }
+            .flatMap { card in
+                [
+                    .init(id: "\(card.cardID)|optionA", sourceText: card.optionAEN),
+                    .init(id: "\(card.cardID)|optionB", sourceText: card.optionBEN),
+                    .init(id: "\(card.cardID)|context", sourceText: card.contextEN),
+                    .init(id: "\(card.cardID)|reference", sourceText: card.referenceEN)
+                ]
+            }
+    }
+
+    @MainActor
+    private func saveCardTranslations(_ values: [String: String]) {
+        dynamicTranslationFailed = false
+        for card in persistedCards
+            where card.deckRawValue == deckID.rawValue && translation(for: card) == nil {
+            guard let optionA = values["\(card.cardID)|optionA"],
+                  let optionB = values["\(card.cardID)|optionB"],
+                  let context = values["\(card.cardID)|context"],
+                  let reference = values["\(card.cardID)|reference"],
+                  let referenceURL = URL(string: card.englishURL) else { continue }
+            modelContext.insert(CardTranslationData(
+                cardID: card.cardID,
+                language: language,
+                optionA: optionA,
+                optionB: optionB,
+                context: context,
+                referenceDisplay: reference,
+                referenceURL: referenceURL
+            ))
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            dynamicTranslationFailed = true
+        }
+    }
+
     private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
 }
 
@@ -404,6 +499,7 @@ struct BiblicalContextView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Query private var persistedDecks: [DeckData]
+    @Query private var deckTranslations: [DeckTranslationData]
     @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
     let card: QuestionCard
     @State private var linkFailed = false
@@ -411,6 +507,11 @@ struct BiblicalContextView: View {
     @State private var failedReferenceURL: URL?
     private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
     private var deck: DeckData? { persistedDecks.first { $0.rawID == card.deckID.rawValue } }
+    private var deckTranslation: DeckTranslationData? {
+        deckTranslations.first {
+            $0.deckID == card.deckID.rawValue && $0.languageCode == language.rawValue
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -421,7 +522,7 @@ struct BiblicalContextView: View {
                         .tracking(1.5)
                         .foregroundStyle(Color.faithGold)
 
-                    Text(deck?.title(for: language) ?? "")
+                    Text(deckTranslation?.title ?? deck?.title(for: language) ?? "")
                         .font(.system(.largeTitle, design: .serif, weight: .regular))
                         .foregroundStyle(Color.faithEspresso)
 

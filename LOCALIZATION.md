@@ -39,3 +39,18 @@ that directory at startup, validates every bundle, and imports its deck and
 card translations into normalized SwiftData rows. Add the language to
 `reviewedLanguages` and increment `CatalogSeeder.cardVersion` in the same
 release so existing installations reseed their card catalog.
+
+## Apple on-device translation
+
+On iOS 18 and later, languages supported by Apple's Translation framework can
+be selected before a reviewed bundle is available. The app translates the 12
+deck descriptions as a small batch, then translates only the selected deck's
+missing card content. Results are cached in the same normalized SwiftData rows.
+
+Apple translation is machine-generated and is labeled in the card experience.
+The original curated Bible URLs are never translated. General interface text
+falls back to English until it receives a bundled localization. iOS 17 keeps
+the bundled English and Simplified Chinese experience because the Translation
+framework is unavailable there. Translation support and model installation
+must be tested on a physical device; the framework does not translate in the
+iOS Simulator.

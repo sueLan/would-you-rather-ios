@@ -70,6 +70,14 @@ final class CatalogTests: XCTestCase {
         XCTAssertFalse(AppLanguage.de.isRightToLeft)
     }
 
+    func testUnreviewedLanguagesUseEnglishUntilATranslationIsCached() throws {
+        let card = try XCTUnwrap(ContentCatalog.payload.cards.first)
+        XCTAssertEqual(card.optionA.value(for: .de), card.optionA.en)
+        XCTAssertEqual(card.context.value(for: .ja), card.context.en)
+        XCTAssertEqual(card.reference.url(for: .th), card.reference.englishURL)
+        XCTAssertEqual(Strings.text(.settings, .es), Strings.text(.settings, .en))
+    }
+
     func testTranslationTemplateContainsEveryDeckAndCardAndRequiresReview() throws {
         let template = CatalogTranslationBundle.reviewTemplate(
             for: .de,

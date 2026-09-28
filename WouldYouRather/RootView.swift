@@ -11,8 +11,12 @@ struct RootView: View {
 }
 
 struct DeckListView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \DeckData.sortOrder) private var decks: [DeckData]
+    @Query private var deckTranslations: [DeckTranslationData]
     @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
+    @State private var dynamicTranslationFailed = false
+    @State private var translationAttempt = 0
     private let columns = [GridItem(.adaptive(minimum: 260), spacing: 18)]
     private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
 
@@ -46,12 +50,17 @@ struct DeckListView: View {
                         .tracking(1.6)
                         .foregroundStyle(Color.faithGold)
 
+                    if dynamicTranslationFailed {
+                        translationFailureView
+                    }
+
                     LazyVGrid(columns: columns, spacing: 18) {
                         ForEach(decks) { deck in
                             if let deckID = deck.deckID {
                                 NavigationLink(value: deckID) {
                                     DeckTile(
                                         deck: deck,
+                                        translation: translation(for: deck),
                                         language: language
                                     )
                                 }
@@ -69,13 +78,82 @@ struct DeckListView: View {
         .navigationDestination(for: DeckID.self) { deckID in
             CardSessionView(deckID: deckID)
         }
+        .background { dynamicDeckTranslationTask }
     }
 
     private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
+
+    private func translation(for deck: DeckData) -> DeckTranslationData? {
+        deckTranslations.first {
+            $0.deckID == deck.rawID && $0.languageCode == language.rawValue
+        }
+    }
+
+    @ViewBuilder
+    private var dynamicDeckTranslationTask: some View {
+        if #available(iOS 18.0, *), !language.isBundled {
+            AppleTranslationTask(
+                targetLanguage: language,
+                requests: missingDeckTranslationRequests,
+                trigger: translationAttempt,
+                onCompletion: saveDeckTranslations,
+                onFailure: { _ in dynamicTranslationFailed = true }
+            )
+        }
+    }
+
+    private var missingDeckTranslationRequests: [AppleTranslationRequest] {
+        decks.flatMap { deck -> [AppleTranslationRequest] in
+            guard translation(for: deck) == nil else { return [] }
+            return [
+                .init(id: "\(deck.rawID):title", sourceText: deck.titleEN),
+                .init(id: "\(deck.rawID):summary", sourceText: deck.summaryEN)
+            ]
+        }
+    }
+
+    @MainActor
+    private func saveDeckTranslations(_ values: [String: String]) {
+        dynamicTranslationFailed = false
+        for deck in decks where translation(for: deck) == nil {
+            guard let title = values["\(deck.rawID):title"],
+                  let summary = values["\(deck.rawID):summary"] else { continue }
+            modelContext.insert(DeckTranslationData(
+                deckID: deck.rawID,
+                language: language,
+                title: title,
+                summary: summary
+            ))
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            dynamicTranslationFailed = true
+        }
+    }
+
+    private var translationFailureView: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle")
+            Text(t(.translationFailed))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(t(.retry)) {
+                dynamicTranslationFailed = false
+                translationAttempt += 1
+            }
+            .fontWeight(.semibold)
+        }
+        .font(.caption)
+        .foregroundStyle(Color.faithBrown)
+        .padding(12)
+        .background(Color.faithGoldLight.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
+    }
 }
 
 private struct DeckTile: View {
     let deck: DeckData
+    let translation: DeckTranslationData?
     let language: AppLanguage
 
     var body: some View {
@@ -90,10 +168,10 @@ private struct DeckTile: View {
                 }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(deck.title(for: language))
+                Text(translation?.title ?? deck.title(for: language))
                     .font(.system(.title3, design: .serif, weight: .semibold))
                     .foregroundStyle(Color.faithEspresso)
-                Text(deck.summary(for: language))
+                Text(translation?.summary ?? deck.summary(for: language))
                     .font(.subheadline)
                     .foregroundStyle(Color.faithBrownSoft)
                     .lineLimit(2)

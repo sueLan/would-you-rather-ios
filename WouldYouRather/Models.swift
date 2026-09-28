@@ -27,6 +27,8 @@ enum AppLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 
     var isRightToLeft: Bool { self == .ar }
+    var isBundled: Bool { self == .en || self == .zhHans }
+    var localeLanguage: Locale.Language { Locale.Language(identifier: rawValue) }
     static let storageKey = "preferred-language"
 
     static var systemDefault: AppLanguage {
@@ -43,7 +45,7 @@ struct LocalizedValue: Codable, Hashable, Sendable {
     let zhHans: String
 
     func value(for language: AppLanguage) -> String {
-        language == .en ? en : zhHans
+        language == .zhHans ? zhHans : en
     }
 }
 
@@ -84,7 +86,7 @@ struct BibleReference: Codable, Hashable, Sendable {
     let chineseURL: URL
 
     func url(for language: AppLanguage) -> URL {
-        language == .en ? englishURL : chineseURL
+        language == .zhHans ? chineseURL : englishURL
     }
 }
 
@@ -137,9 +139,9 @@ final class ChoiceRecord {
         self.selectedOption = option.rawValue
         self.chosenAt = chosenAt
         self.localeIdentifier = language.rawValue
-        self.questionSnapshot = language == .en
-            ? "Would you rather \(optionA.lowercased()) or \(optionB.lowercased())?"
-            : "你愿意\(optionA)，还是\(optionB)？"
+        self.questionSnapshot = language == .zhHans
+            ? "你愿意\(optionA)，还是\(optionB)？"
+            : "Would you rather \(optionA.lowercased()) or \(optionB.lowercased())?"
         self.optionASnapshot = optionA
         self.optionBSnapshot = optionB
         self.answerSnapshot = option == .a ? optionA : optionB
@@ -170,8 +172,8 @@ final class DeckData {
     }
 
     var deckID: DeckID? { DeckID(rawValue: rawID) }
-    func title(for language: AppLanguage) -> String { language == .en ? titleEN : titleZH }
-    func summary(for language: AppLanguage) -> String { language == .en ? summaryEN : summaryZH }
+    func title(for language: AppLanguage) -> String { language == .zhHans ? titleZH : titleEN }
+    func summary(for language: AppLanguage) -> String { language == .zhHans ? summaryZH : summaryEN }
 }
 
 @Model
@@ -218,6 +220,29 @@ final class CardData {
                 display: .init(en: referenceEN, zhHans: referenceZH),
                 englishURL: englishURL,
                 chineseURL: chineseURL
+            )
+        )
+    }
+
+    func questionCard(using translation: CardTranslationData?) -> QuestionCard? {
+        guard let base = questionCard, let translation else { return questionCard }
+        let optionA = LocalizedValue(en: translation.optionA, zhHans: translation.optionA)
+        let optionB = LocalizedValue(en: translation.optionB, zhHans: translation.optionB)
+        let context = LocalizedValue(en: translation.context, zhHans: translation.context)
+        let referenceDisplay = LocalizedValue(
+            en: translation.referenceDisplay,
+            zhHans: translation.referenceDisplay
+        )
+        return QuestionCard(
+            id: base.id,
+            deckID: base.deckID,
+            optionA: optionA,
+            optionB: optionB,
+            context: context,
+            reference: BibleReference(
+                display: referenceDisplay,
+                englishURL: base.reference.englishURL,
+                chineseURL: base.reference.englishURL
             )
         )
     }

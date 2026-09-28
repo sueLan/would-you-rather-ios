@@ -12,6 +12,10 @@ enum TranslationRegistry {
     static var awaitingReview: [AppLanguage] {
         AppLanguage.allCases.filter { !reviewedLanguages.contains($0) }
     }
+
+    static func isAvailable(_ language: AppLanguage) -> Bool {
+        reviewedLanguages.contains(language)
+    }
 }
 
 struct CatalogTranslationBundle: Codable, Sendable {

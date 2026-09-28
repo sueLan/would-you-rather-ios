@@ -1,7 +1,9 @@
 import SwiftUI
+@preconcurrency import Translation
 
 struct SettingsView: View {
     @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
+    @State private var dynamicallySupportedLanguages: Set<AppLanguage> = []
     private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
 
     var body: some View {
@@ -19,13 +21,35 @@ struct SettingsView: View {
                 }
 
                 Section(t(.language)) {
-                    Picker(t(.language), selection: $languageRawValue) {
-                        ForEach(TranslationRegistry.releaseLanguages) { language in
-                            Text(language.displayName).tag(language.rawValue)
+                    Menu {
+                        ForEach(AppLanguage.allCases) { candidate in
+                            let isAvailable = isAvailable(candidate)
+                            Button {
+                                languageRawValue = candidate.rawValue
+                            } label: {
+                                if candidate == language {
+                                    Label(candidate.displayName, systemImage: "checkmark")
+                                } else if isAvailable {
+                                    Text(candidate.displayName)
+                                } else {
+                                    Text("\(candidate.displayName) — \(t(.translationPending))")
+                                }
+                            }
+                            .disabled(!isAvailable)
+                        }
+                    } label: {
+                        HStack {
+                            Text(t(.language))
+                                .foregroundStyle(Color.faithEspresso)
+                            Spacer()
+                            Text(language.displayName)
+                                .foregroundStyle(Color.faithBrownSoft)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.faithGold)
                         }
                     }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
+                    .accessibilityValue("\(language.displayName), \(t(.selected))")
                 }
 
                 Section(t(.about)) {
@@ -63,7 +87,29 @@ struct SettingsView: View {
         }
         .navigationTitle(t(.settings))
         .toolbarBackground(Color.faithPaper.opacity(0.88), for: .navigationBar)
+        .task { await loadDynamicLanguageSupport() }
     }
 
     private func t(_ key: Strings.Key) -> String { Strings.text(key, language) }
+
+    private func isAvailable(_ candidate: AppLanguage) -> Bool {
+        TranslationRegistry.isAvailable(candidate)
+            || dynamicallySupportedLanguages.contains(candidate)
+    }
+
+    private func loadDynamicLanguageSupport() async {
+        guard #available(iOS 18.0, *) else { return }
+        let availability = LanguageAvailability()
+        var supported: Set<AppLanguage> = []
+        for candidate in TranslationRegistry.awaitingReview {
+            let status = await availability.status(
+                from: AppLanguage.en.localeLanguage,
+                to: candidate.localeLanguage
+            )
+            if status != .unsupported {
+                supported.insert(candidate)
+            }
+        }
+        dynamicallySupportedLanguages = supported
+    }
 }

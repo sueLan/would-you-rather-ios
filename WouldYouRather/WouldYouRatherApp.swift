@@ -43,6 +43,7 @@ struct WouldYouRatherApp: App {
         WindowGroup {
             RootView()
                 .preferredColorScheme(.light)
+                .environment(\.layoutDirection, currentLanguage.isRightToLeft ? .rightToLeft : .leftToRight)
                 .task {
                     await seedCatalog()
                 }
