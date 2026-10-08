@@ -3,7 +3,7 @@ import SwiftData
 @ModelActor
 actor CatalogSeeder {
     static let deckVersion = 1
-    static let cardVersion = 3
+    static let cardVersion = 4
 
     func seedDecksIfNeeded(decks: [DeckDefinition], version: Int) throws {
         guard try storedVersion(for: "deck-catalog") != version else { return }

@@ -89,7 +89,7 @@ enum RelatedScriptureCatalog {
 
 extension QuestionCard {
     var scriptureReferences: [BibleReference] {
-        ([reference] + RelatedScriptureCatalog.references(for: deckID)).reduce(into: []) { result, item in
+        ([reference] + (CatalogExpansion.supportingReferences[id] ?? []) + RelatedScriptureCatalog.references(for: deckID)).reduce(into: []) { result, item in
             guard !result.contains(where: { $0.englishURL == item.englishURL }) else { return }
             result.append(item)
         }

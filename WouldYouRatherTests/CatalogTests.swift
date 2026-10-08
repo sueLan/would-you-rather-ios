@@ -41,7 +41,7 @@ final class CatalogTests: XCTestCase {
         for card in ContentCatalog.payload.cards {
             let references = card.scriptureReferences
             XCTAssertGreaterThanOrEqual(references.count, 3)
-            XCTAssertLessThanOrEqual(references.count, 4)
+            XCTAssertLessThanOrEqual(references.count, 5)
             XCTAssertEqual(Set(references.map(\.englishURL)).count, references.count)
 
             for reference in references {
@@ -147,6 +147,44 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(counts.deckTranslations, DeckID.allCases.count * 2)
         XCTAssertEqual(counts.cardTranslations, DeckID.allCases.count * 50 * 2)
         XCTAssertEqual(counts.metadata, 2)
+    }
+
+    @MainActor
+    func testCatalogUpgradeRefreshesCardsAndPreservesHistory() async throws {
+        let container = try makeContainer()
+        let seeder = CatalogSeeder(modelContainer: container)
+        let updated = try XCTUnwrap(ContentCatalog.cards.first)
+        let old = QuestionCard(
+            id: updated.id, deckID: updated.deckID,
+            optionA: .init(en: "Old choice", zhHans: "旧选项"),
+            optionB: updated.optionB, context: updated.context, reference: updated.reference
+        )
+        try await seeder.seedIfNeeded(
+            payload: CatalogPayload(decks: ContentCatalog.decks, cards: [old]),
+            deckVersion: CatalogSeeder.deckVersion, cardVersion: 3
+        )
+        let history = ChoiceRecord(card: old, option: .a, language: .en)
+        container.mainContext.insert(history)
+        try container.mainContext.save()
+
+        try await seeder.seedIfNeeded(
+            payload: ContentCatalog.payload,
+            deckVersion: CatalogSeeder.deckVersion, cardVersion: CatalogSeeder.cardVersion
+        )
+        let cards = try container.mainContext.fetch(FetchDescriptor<CardData>())
+        XCTAssertEqual(cards.count, 600)
+        XCTAssertEqual(cards.first { $0.cardID == updated.id }?.optionAEN, updated.optionA.en)
+        let records = try container.mainContext.fetch(FetchDescriptor<ChoiceRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.optionASnapshot, "Old choice")
+    }
+
+    func testUpdatedCardsIncludeBothChoiceScriptures() throws {
+        let card = try XCTUnwrap(ContentCatalog.cards.first { $0.id == "love-01" })
+        XCTAssertEqual(card.optionA.en, "Invite a new church member to a meal")
+        XCTAssertEqual(card.optionB.zhHans, "帮助教会的新朋友认识一个小组")
+        XCTAssertEqual(card.scriptureReferences[0].display.en, "Romans 12:13")
+        XCTAssertEqual(card.scriptureReferences[1].display.en, "Hebrews 10:24–25")
     }
 
     @MainActor
