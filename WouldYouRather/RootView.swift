@@ -55,12 +55,27 @@ struct DeckListView: View {
                     }
 
                     LazyVGrid(columns: columns, spacing: 18) {
+                        NavigationLink {
+                            CardSessionView(deckID: nil)
+                        } label: {
+                            DeckTile(
+                                title: ContentCatalog.allTopicsTitle.value(for: language),
+                                summary: ContentCatalog.allTopicsSummary.value(for: language),
+                                cardCount: decks.reduce(0) { $0 + $1.cardCount },
+                                symbol: "rectangle.stack.fill",
+                                language: language
+                            )
+                        }
+                        .buttonStyle(.plain)
+
                         ForEach(decks) { deck in
                             if let deckID = deck.deckID {
                                 NavigationLink(value: deckID) {
                                     DeckTile(
-                                        deck: deck,
-                                        translation: translation(for: deck),
+                                        title: translation(for: deck)?.title ?? deck.title(for: language),
+                                        summary: translation(for: deck)?.summary ?? deck.summary(for: language),
+                                        cardCount: deck.cardCount,
+                                        symbol: deckID.symbol,
                                         language: language
                                     )
                                 }
@@ -152,13 +167,15 @@ struct DeckListView: View {
 }
 
 private struct DeckTile: View {
-    let deck: DeckData
-    let translation: DeckTranslationData?
+    let title: String
+    let summary: String
+    let cardCount: Int
+    let symbol: String
     let language: AppLanguage
 
     var body: some View {
         HStack(spacing: 18) {
-            Image(systemName: deck.deckID?.symbol ?? "rectangle.stack")
+            Image(systemName: symbol)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(Color.faithGold)
                 .frame(width: 54, height: 54)
@@ -168,14 +185,14 @@ private struct DeckTile: View {
                 }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(translation?.title ?? deck.title(for: language))
+                Text(title)
                     .font(.system(.title3, design: .serif, weight: .semibold))
                     .foregroundStyle(Color.faithEspresso)
-                Text(translation?.summary ?? deck.summary(for: language))
+                Text(summary)
                     .font(.subheadline)
                     .foregroundStyle(Color.faithBrownSoft)
                     .lineLimit(2)
-                Text(Strings.text(.cards(deck.cardCount), language))
+                Text(Strings.text(.cards(cardCount), language))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.faithGold)
             }

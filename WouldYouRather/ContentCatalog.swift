@@ -1,6 +1,12 @@
 import Foundation
 
 enum ContentCatalog {
+    static let allTopicsTitle = LocalizedValue(en: "All Topics", zhHans: "全部主题")
+    static let allTopicsSummary = LocalizedValue(
+        en: "Explore shuffled questions from every topic.",
+        zhHans: "随机探索所有主题的问题。"
+    )
+
     static let payload = CatalogPayload(decks: decks, cards: cards)
 
     static let decks: [DeckDefinition] = [

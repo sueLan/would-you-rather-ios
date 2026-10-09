@@ -12,7 +12,8 @@ struct CardSessionView: View {
     @Query private var deckTranslations: [DeckTranslationData]
     @AppStorage(AppLanguage.storageKey) private var languageRawValue = AppLanguage.systemDefault.rawValue
 
-    let deckID: DeckID
+    /// A nil deck includes cards from every topic.
+    let deckID: DeckID?
     @State private var cardIDs: [String] = []
     @State private var index = 0
     @State private var dragOffset: CGSize = .zero
@@ -27,11 +28,19 @@ struct CardSessionView: View {
     @State private var translationAttempt = 0
 
     private var language: AppLanguage { AppLanguage(rawValue: languageRawValue) ?? .systemDefault }
-    private var deck: DeckData? { persistedDecks.first { $0.rawID == deckID.rawValue } }
+    private var deck: DeckData? { persistedDecks.first { $0.rawID == deckID?.rawValue } }
     private var deckTranslation: DeckTranslationData? {
         deckTranslations.first {
-            $0.deckID == deckID.rawValue && $0.languageCode == language.rawValue
+            $0.deckID == deckID?.rawValue && $0.languageCode == language.rawValue
         }
+    }
+    private var sessionTitle: String {
+        deckID == nil
+            ? ContentCatalog.allTopicsTitle.value(for: language)
+            : deckTranslation?.title ?? deck?.title(for: language) ?? ""
+    }
+    private var sessionCards: [CardData] {
+        persistedCards.filter { deckID == nil || $0.deckRawValue == deckID?.rawValue }
     }
     private var currentCard: QuestionCard? {
         guard cardIDs.indices.contains(index) else { return nil }
@@ -51,7 +60,7 @@ struct CardSessionView: View {
                 cardExperience(card)
             }
         }
-        .navigationTitle(deckTranslation?.title ?? deck?.title(for: language) ?? "")
+        .navigationTitle(sessionTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarColorScheme(.light, for: .navigationBar)
         .toolbarBackground(Color.faithPaper.opacity(0.78), for: .navigationBar)
@@ -79,7 +88,7 @@ struct CardSessionView: View {
             VStack(spacing: 12) {
                 HStack {
                     Label {
-                        Text((deckTranslation?.title ?? deck?.title(for: language) ?? "").uppercased())
+                        Text(sessionTitle.uppercased())
                     } icon: {
                         Image(systemName: "sparkle")
                             .foregroundStyle(Color.faithGold)
@@ -311,8 +320,7 @@ struct CardSessionView: View {
     }
 
     private func shuffle() {
-        cardIDs = persistedCards
-            .filter { $0.deckRawValue == deckID.rawValue }
+        cardIDs = sessionCards
             .map(\.cardID)
             .shuffled()
         index = 0
@@ -349,8 +357,8 @@ struct CardSessionView: View {
     }
 
     private var missingCardTranslationRequests: [AppleTranslationRequest] {
-        persistedCards
-            .filter { $0.deckRawValue == deckID.rawValue && translation(for: $0) == nil }
+        sessionCards
+            .filter { translation(for: $0) == nil }
             .flatMap { card in
                 [
                     .init(id: "\(card.cardID)|optionA", sourceText: card.optionAEN),
@@ -364,8 +372,8 @@ struct CardSessionView: View {
     @MainActor
     private func saveCardTranslations(_ values: [String: String]) {
         dynamicTranslationFailed = false
-        for card in persistedCards
-            where card.deckRawValue == deckID.rawValue && translation(for: card) == nil {
+        for card in sessionCards
+            where translation(for: card) == nil {
             guard let optionA = values["\(card.cardID)|optionA"],
                   let optionB = values["\(card.cardID)|optionB"],
                   let context = values["\(card.cardID)|context"],
